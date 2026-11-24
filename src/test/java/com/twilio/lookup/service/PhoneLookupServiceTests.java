@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -24,8 +25,15 @@ import com.twilio.lookup.util.PhoneNormalizer;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -158,5 +166,54 @@ class PhoneLookupServiceTests {
 		assertThat(response.lineType()).isNull();
 		assertThat(response.validationErrors()).containsExactly("INVALID_LENGTH");
 		verify(repository).save(any(PhoneLookup.class));
+	}
+
+	@Test
+	void concurrentRequestsForSameNumberCallProviderOnce() throws Exception {
+		AtomicReference<PhoneLookup> store = new AtomicReference<>();
+		when(repository.findById(NUMBER)).thenAnswer(inv -> Optional.ofNullable(store.get()));
+		when(stalenessPolicy.isStale(NOW)).thenReturn(false);
+		when(provider.lookup(NUMBER)).thenAnswer(inv -> {
+			Thread.sleep(25);
+			return providerResponse(true);
+		});
+		when(repository.save(any(PhoneLookup.class))).thenAnswer(inv -> {
+			PhoneLookup saved = inv.getArgument(0);
+			store.set(saved);
+			return saved;
+		});
+
+		int threads = 8;
+		CountDownLatch ready = new CountDownLatch(threads);
+		CountDownLatch start = new CountDownLatch(1);
+		List<PhoneLookupResponse> responses = new ArrayList<>();
+
+		ExecutorService pool = Executors.newFixedThreadPool(threads);
+		try {
+			List<Future<PhoneLookupResponse>> futures = new ArrayList<>();
+			for (int i = 0; i < threads; i++) {
+				PhoneLookupRequest req = (i % 2 == 0)
+						? REQUEST
+						: new PhoneLookupRequest("+14159929960", null);
+				futures.add(pool.submit(() -> {
+					ready.countDown();
+					assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
+					return service.lookup(req);
+				}));
+			}
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			for (Future<PhoneLookupResponse> future : futures) {
+				responses.add(future.get(5, TimeUnit.SECONDS));
+			}
+		}
+		finally {
+			pool.shutdownNow();
+		}
+
+		verify(provider, times(1)).lookup(NUMBER);
+		verify(repository, times(1)).save(any(PhoneLookup.class));
+		assertThat(responses).filteredOn(r -> r.source() == LookupSource.PROVIDER).hasSize(1);
+		assertThat(responses).filteredOn(r -> r.source() == LookupSource.DATABASE).hasSize(threads - 1);
 	}
 }

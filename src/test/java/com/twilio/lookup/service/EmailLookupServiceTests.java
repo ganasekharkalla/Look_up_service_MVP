@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -24,7 +25,15 @@ import com.twilio.lookup.util.EmailNormalizer;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -150,5 +159,54 @@ class EmailLookupServiceTests {
 
 		assertThatThrownBy(() -> service.lookup(REQUEST)).isInstanceOf(PermanentProviderException.class);
 		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void concurrentRequestsForSameEmailCallProviderOnce() throws Exception {
+		AtomicReference<EmailLookup> store = new AtomicReference<>();
+		when(repository.findById(EMAIL)).thenAnswer(inv -> Optional.ofNullable(store.get()));
+		when(stalenessPolicy.isStale(NOW)).thenReturn(false);
+		when(provider.lookup(EMAIL)).thenAnswer(inv -> {
+			Thread.sleep(25);
+			return providerResponse("Valid");
+		});
+		when(repository.save(any(EmailLookup.class))).thenAnswer(inv -> {
+			EmailLookup saved = inv.getArgument(0);
+			store.set(saved);
+			return saved;
+		});
+
+		int threads = 8;
+		CountDownLatch ready = new CountDownLatch(threads);
+		CountDownLatch start = new CountDownLatch(1);
+		List<EmailLookupResponse> responses = new ArrayList<>();
+
+		ExecutorService pool = Executors.newFixedThreadPool(threads);
+		try {
+			List<Future<EmailLookupResponse>> futures = new ArrayList<>();
+			for (int i = 0; i < threads; i++) {
+				EmailLookupRequest req = (i % 2 == 0)
+						? REQUEST
+						: new EmailLookupRequest("JANE@EXAMPLE.COM");
+				futures.add(pool.submit(() -> {
+					ready.countDown();
+					assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
+					return service.lookup(req);
+				}));
+			}
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			for (Future<EmailLookupResponse> future : futures) {
+				responses.add(future.get(5, TimeUnit.SECONDS));
+			}
+		}
+		finally {
+			pool.shutdownNow();
+		}
+
+		verify(provider, times(1)).lookup(EMAIL);
+		verify(repository, times(1)).save(any(EmailLookup.class));
+		assertThat(responses).filteredOn(r -> r.source() == LookupSource.PROVIDER).hasSize(1);
+		assertThat(responses).filteredOn(r -> r.source() == LookupSource.DATABASE).hasSize(threads - 1);
 	}
 }

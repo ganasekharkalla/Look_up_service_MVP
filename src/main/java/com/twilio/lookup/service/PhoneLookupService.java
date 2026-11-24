@@ -29,6 +29,7 @@ public class PhoneLookupService {
 	private final StalenessPolicy stalenessPolicy;
 	private final PhoneLookupProvider provider;
 	private final PhoneProviderMapper mapper;
+	private final KeyLock keyLock = new KeyLock();
 
 	public PhoneLookupService(PhoneNormalizer normalizer, PhoneLookupRepository repository,
 			StalenessPolicy stalenessPolicy, PhoneLookupProvider provider, PhoneProviderMapper mapper) {
@@ -43,6 +44,10 @@ public class PhoneLookupService {
 		String number = normalizer.normalize(request.phoneNumber(), request.countryCode())
 				.orElseThrow(() -> new InvalidLookupException("Invalid phone number"));
 
+		return keyLock.withLock(number, () -> lookupNormalized(number));
+	}
+
+	private PhoneLookupResponse lookupNormalized(String number) {
 		PhoneLookup existing = repository.findById(number).orElse(null);
 		if (existing != null && !stalenessPolicy.isStale(existing.getCheckedAt())) {
 			return PhoneResponseAssembler.toResponse(existing, LookupSource.DATABASE, false);

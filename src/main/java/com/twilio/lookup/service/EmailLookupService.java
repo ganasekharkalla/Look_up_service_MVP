@@ -31,6 +31,7 @@ public class EmailLookupService {
 	private final StalenessPolicy stalenessPolicy;
 	private final EmailLookupProvider provider;
 	private final EmailProviderMapper mapper;
+	private final KeyLock keyLock = new KeyLock();
 
 	public EmailLookupService(EmailNormalizer normalizer, EmailLookupRepository repository,
 			StalenessPolicy stalenessPolicy, EmailLookupProvider provider, EmailProviderMapper mapper) {
@@ -45,6 +46,10 @@ public class EmailLookupService {
 		String email = normalizer.normalize(request.email())
 				.orElseThrow(() -> new InvalidLookupException("Invalid email address"));
 
+		return keyLock.withLock(email, () -> lookupNormalized(email));
+	}
+
+	private EmailLookupResponse lookupNormalized(String email) {
 		EmailLookup existing = repository.findById(email).orElse(null);
 		if (existing != null && !stalenessPolicy.isStale(existing.getCheckedAt())) {
 			return toResponse(existing, LookupSource.DATABASE, false);
