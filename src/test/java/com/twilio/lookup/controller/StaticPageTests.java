@@ -18,13 +18,18 @@ class StaticPageTests extends AbstractMongoIntegrationTest {
 	@Autowired MockMvc mvc;
 
 	@Test
-	void rootForwardsToTheIndexPage() throws Exception {
+	void rootServesTheLandingPage() throws Exception {
 		mvc.perform(get("/")).andExpect(status().isOk()).andExpect(forwardedUrl("index.html"));
+		mvc.perform(get("/index.html")).andExpect(status().isOk())
+				.andExpect(content().string(Matchers.allOf(
+						Matchers.containsString("href=\"/phone\""),
+						Matchers.containsString("href=\"/email\""))));
 	}
 
 	@Test
-	void indexPageContainsThePhoneLookupForm() throws Exception {
-		mvc.perform(get("/index.html")).andExpect(status().isOk())
+	void phonePathForwardsToThePhonePage() throws Exception {
+		mvc.perform(get("/phone")).andExpect(status().isOk()).andExpect(forwardedUrl("/phone.html"));
+		mvc.perform(get("/phone.html")).andExpect(status().isOk())
 				.andExpect(content().string(Matchers.allOf(
 						Matchers.containsString("id=\"phone-form\""),
 						Matchers.containsString("id=\"country-button\""),
@@ -33,5 +38,16 @@ class StaticPageTests extends AbstractMongoIntegrationTest {
 						Matchers.containsString("id=\"submit-btn\""),
 						Matchers.containsString("id=\"result\""),
 						Matchers.containsString("/api/v1/lookups/phone"))));
+	}
+
+	@Test
+	void emailPathForwardsToTheEmailPage() throws Exception {
+		mvc.perform(get("/email")).andExpect(status().isOk()).andExpect(forwardedUrl("/email.html"));
+		mvc.perform(get("/email.html")).andExpect(status().isOk())
+				.andExpect(content().string(Matchers.allOf(
+						Matchers.containsString("id=\"email-form\""),
+						Matchers.containsString("id=\"email\""),
+						Matchers.containsString("id=\"submit-btn\""),
+						Matchers.containsString("/api/v1/lookups/email"))));
 	}
 }

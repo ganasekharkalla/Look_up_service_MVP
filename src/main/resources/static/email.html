@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email lookup</title>
+<style>
+  :root { --border: #c8ccd4; --accent: #2f5bea; --bad: #b3261e; --good: #1b7a3a; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f5f6f8; margin: 0; padding: 2rem 1rem; color: #1b1d22; }
+  main { max-width: 34rem; margin: 0 auto; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 1rem; }
+  label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .35rem; }
+  #email { width: 100%; padding: .6rem .7rem; font: inherit; border: 1px solid var(--border); border-radius: 6px; }
+  #email[aria-invalid="true"] { border-color: var(--bad); }
+  #hint { min-height: 1.3rem; margin: .4rem 0 0; font-size: .85rem; color: #5b6270; }
+  #hint.error { color: var(--bad); }
+  #submit-btn { margin-top: .8rem; padding: .6rem 1.2rem; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 6px; cursor: pointer; }
+  #submit-btn:disabled { opacity: .55; cursor: not-allowed; }
+  #result { margin-top: 1.2rem; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: .6rem 0 0; }
+  dt { color: #5b6270; }
+  dd { margin: 0; word-break: break-word; }
+  .badge { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .8rem; font-weight: 600; background: #e6e8ee; }
+  .badge.valid { background: #d9f2e1; color: var(--good); }
+  .badge.invalid { background: #fbe0de; color: var(--bad); }
+  .badge.stale { background: #fff1cc; color: #7a5600; }
+  .error-box { border: 1px solid var(--bad); color: var(--bad); border-radius: 6px; padding: .6rem .8rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="/">&larr; Home</a></p>
+  <h1>Email lookup</h1>
+  <form id="email-form" novalidate>
+    <label for="email">Email address</label>
+    <input id="email" name="email" type="email" inputmode="email" autocomplete="email"
+           placeholder="name@example.com" aria-describedby="hint">
+    <p id="hint"></p>
+    <button type="submit" id="submit-btn">Look up</button>
+  </form>
+  <div id="result" aria-live="polite"></div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('email-form'),
+      input = document.getElementById('email'),
+      hint = document.getElementById('hint'),
+      submit = document.getElementById('submit-btn'),
+      resultBox = document.getElementById('result');
+
+  // Basic local check only. The backend normalizer is the authority.
+  function looksValid(value) {
+    var at = value.indexOf('@');
+    return at > 0 && at === value.lastIndexOf('@') && at < value.length - 1 && value.indexOf(' ') < 0;
+  }
+
+  function esc(v) {
+    return String(v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function row(label, value) {
+    return '<dt>' + label + '</dt><dd>' + (value === null || value === undefined || value === '' ? '&ndash;' : value) + '</dd>';
+  }
+  function showError(message) {
+    resultBox.innerHTML = '<div class="error-box" role="alert">' + esc(message) + '</div>';
+  }
+  function showResult(r) {
+    var cls = r.status === 'VALID' ? 'valid' : 'invalid';
+    var checks = r.checks || {};
+    resultBox.innerHTML =
+      '<dl>' +
+      row('Status', '<span class="badge ' + cls + '">' + esc(r.status) + '</span>' +
+        (r.stale ? ' <span class="badge stale">stale</span>' : '')) +
+      row('Normalized', esc(r.normalizedEmail)) +
+      row('Source', '<span class="badge">' + esc(r.source) + '</span>') +
+      row('Verdict', r.verdict && esc(r.verdict)) +
+      row('Score', esc(r.score)) +
+      row('Domain', r.host && esc(r.host)) +
+      row('Suggestion', r.suggestion && esc(r.suggestion)) +
+      row('Valid syntax', checks.hasValidAddressSyntax ? 'yes' : 'no') +
+      row('MX / A record', checks.hasMxOrARecord ? 'yes' : 'no') +
+      row('Disposable', checks.suspectedDisposableAddress ? 'yes' : 'no') +
+      row('Role address', checks.suspectedRoleAddress ? 'yes' : 'no') +
+      row('Known bounces', checks.hasKnownBounces ? 'yes' : 'no') +
+      row('Suspected bounces', checks.hasSuspectedBounces ? 'yes' : 'no') +
+      row('Checked at', r.checkedAt && esc(new Date(r.checkedAt).toLocaleString())) +
+      '</dl>';
+  }
+
+  input.addEventListener('input', function () {
+    var v = input.value.trim();
+    var bad = v !== '' && !looksValid(v);
+    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    hint.textContent = bad ? 'Enter an address like name@example.com.' : '';
+    hint.className = bad ? 'error' : '';
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    resultBox.innerHTML = '';
+    var email = input.value.trim();
+    if (!looksValid(email)) {
+      input.setAttribute('aria-invalid', 'true');
+      hint.textContent = 'Enter an address like name@example.com.';
+      hint.className = 'error';
+      input.focus();
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = 'Looking up...';
+    fetch('/api/v1/lookups/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ email: email })
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+    }).then(function (out) {
+      if (out.ok) showResult(out.body);
+      else showError((out.body && out.body.message) || ('Request failed (' + out.status + ')'));
+    }).catch(function () {
+      showError('Could not reach the server.');
+    }).then(function () {
+      submit.disabled = false;
+      submit.textContent = 'Look up';
+    });
+  });
+})();
+</script>
+</body>
+</html>

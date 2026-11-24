@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone lookup</title>
+<style>
+  :root { --border: #c8ccd4; --accent: #2f5bea; --bad: #b3261e; --good: #1b7a3a; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f5f6f8; margin: 0; padding: 2rem 1rem; color: #1b1d22; }
+  main { max-width: 34rem; margin: 0 auto; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 1rem; }
+  label.field { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .35rem; }
+  .row { display: flex; gap: .5rem; align-items: stretch; }
+  .picker { position: relative; }
+  #country-button { display: flex; align-items: center; gap: .4rem; height: 100%; padding: 0 .7rem; background: #fff; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font: inherit; white-space: nowrap; }
+  #country-panel { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; width: 20rem; max-width: 85vw; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+  #country-panel[hidden] { display: none; }
+  #country-search { width: 100%; padding: .55rem .7rem; border: 0; border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; font: inherit; }
+  #country-list { list-style: none; margin: 0; padding: 0; max-height: 15rem; overflow-y: auto; }
+  #country-list li { display: flex; gap: .5rem; padding: .45rem .7rem; cursor: pointer; }
+  #country-list li .name { flex: 1; }
+  #country-list li .dial { color: #5b6270; }
+  #country-list li[aria-selected="true"] { background: #e8eefc; }
+  #country-list li.empty { color: #5b6270; cursor: default; }
+  #national-number { flex: 1; min-width: 0; padding: .6rem .7rem; font: inherit; border: 1px solid var(--border); border-radius: 6px; }
+  #national-number[aria-invalid="true"] { border-color: var(--bad); }
+  #hint { min-height: 1.3rem; margin: .4rem 0 0; font-size: .85rem; color: #5b6270; }
+  #hint.error { color: var(--bad); }
+  #submit-btn { margin-top: .8rem; padding: .6rem 1.2rem; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 6px; cursor: pointer; }
+  #submit-btn:disabled { opacity: .55; cursor: not-allowed; }
+  #result { margin-top: 1.2rem; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: .6rem 0 0; }
+  dt { color: #5b6270; }
+  dd { margin: 0; word-break: break-word; }
+  .badge { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .8rem; font-weight: 600; background: #e6e8ee; }
+  .badge.valid { background: #d9f2e1; color: var(--good); }
+  .badge.invalid { background: #fbe0de; color: var(--bad); }
+  .badge.stale { background: #fff1cc; color: #7a5600; }
+  .error-box { border: 1px solid var(--bad); color: var(--bad); border-radius: 6px; padding: .6rem .8rem; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="/">&larr; Home</a></p>
+  <h1>Phone lookup</h1>
+  <form id="phone-form" novalidate>
+    <label class="field" for="national-number">Phone number</label>
+    <div class="row">
+      <div class="picker">
+        <button type="button" id="country-button" role="combobox" aria-haspopup="listbox"
+                aria-expanded="false" aria-controls="country-list" aria-label="Country">
+          <span id="country-flag" aria-hidden="true"></span>
+          <span id="country-dial"></span>
+          <span aria-hidden="true">&#9662;</span>
+        </button>
+        <div id="country-panel" hidden>
+          <input id="country-search" type="text" placeholder="Search country or code"
+                 aria-label="Search countries" autocomplete="off" aria-controls="country-list">
+          <ul id="country-list" role="listbox" aria-label="Countries"></ul>
+        </div>
+      </div>
+      <input id="national-number" type="tel" inputmode="tel" autocomplete="tel-national"
+             placeholder="Phone number" aria-describedby="hint">
+    </div>
+    <p id="hint"></p>
+    <button type="submit" id="submit-btn">Look up</button>
+  </form>
+  <div id="result" aria-live="polite"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1/bundle/libphonenumber-min.js"></script>
+<script>
+/*
+ * Validation rules: the backend (Google libphonenumber, Java) is the final authority.
+ * libphonenumber-js is used here only for UX: formatting while typing and a local pre-check
+ * that mirrors the backend rule, so obviously invalid numbers never reach the server.
+ */
+(function () {
+  'use strict';
+  var lib = window.libphonenumber;
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $('phone-form'), button = $('country-button'), panel = $('country-panel'),
+      search = $('country-search'), list = $('country-list'), input = $('national-number'),
+      hint = $('hint'), submit = $('submit-btn'), resultBox = $('result');
+
+  if (!lib) {
+    hint.textContent = 'Could not load libphonenumber-js. Check your network connection.';
+    hint.className = 'error';
+    submit.disabled = true;
+    return;
+  }
+
+  var names = (typeof Intl !== 'undefined' && Intl.DisplayNames) ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
+  function flag(iso) {
+    return iso.replace(/./g, function (c) { return String.fromCodePoint(127397 + c.charCodeAt(0)); });
+  }
+  var countries = lib.getCountries().map(function (iso) {
+    var name = names ? (names.of(iso) || iso) : iso;
+    return { iso: iso, name: name, dial: '+' + lib.getCountryCallingCode(iso), flag: flag(iso) };
+  }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var byIso = {};
+  countries.forEach(function (c) { byIso[c.iso] = c; });
+
+  var selected = byIso[defaultCountry()];
+  var visible = [], active = -1;
+
+  function defaultCountry() {
+    var lang = (navigator.language || '').split('-')[1];
+    lang = lang ? lang.toUpperCase() : '';
+    return lib.getCountries().indexOf(lang) >= 0 ? lang : 'US';
+  }
+
+  function renderButton() {
+    $('country-flag').textContent = selected.flag;
+    $('country-dial').textContent = selected.dial;
+    button.setAttribute('aria-label', 'Country: ' + selected.name + ' ' + selected.dial);
+  }
+
+  function renderList() {
+    var q = search.value.trim().toLowerCase().replace(/^\+/, '');
+    visible = countries.filter(function (c) {
+      return !q || c.name.toLowerCase().indexOf(q) >= 0 || c.iso.toLowerCase() === q || c.dial.slice(1).indexOf(q) === 0;
+    });
+    list.innerHTML = '';
+    if (!visible.length) {
+      var empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'No matches';
+      list.appendChild(empty);
+    }
+    visible.forEach(function (c, i) {
+      var li = document.createElement('li');
+      li.id = 'country-opt-' + c.iso;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', i === active ? 'true' : 'false');
+      li.innerHTML = '<span aria-hidden="true"></span><span class="name"></span><span class="dial"></span>';
+      li.children[0].textContent = c.flag;
+      li.children[1].textContent = c.name;
+      li.children[2].textContent = c.dial;
+      li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(c); });
+      list.appendChild(li);
+    });
+    var cur = visible[active];
+    if (cur) {
+      search.setAttribute('aria-activedescendant', 'country-opt-' + cur.iso);
+      var el = $('country-opt-' + cur.iso);
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    } else {
+      search.removeAttribute('aria-activedescendant');
+    }
+  }
+
+  function openPanel() {
+    panel.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    search.value = '';
+    active = Math.max(0, countries.indexOf(selected));
+    renderList();
+    search.focus();
+  }
+  function closePanel(returnFocus) {
+    panel.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    if (returnFocus) button.focus();
+  }
+  function choose(c) {
+    selected = c;
+    renderButton();
+    closePanel(false);
+    input.focus();
+    reformat();
+  }
+
+  button.addEventListener('click', function () { panel.hidden ? openPanel() : closePanel(false); });
+  button.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (panel.hidden) openPanel(); }
+  });
+  search.addEventListener('input', function () { active = visible.length ? 0 : -1; renderList(); });
+  search.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (visible.length) { active = (active + 1) % visible.length; renderList(); } }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (visible.length) { active = (active - 1 + visible.length) % visible.length; renderList(); } }
+    else if (e.key === 'Home') { e.preventDefault(); active = 0; renderList(); }
+    else if (e.key === 'End') { e.preventDefault(); active = visible.length - 1; renderList(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (visible[active]) choose(visible[active]); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePanel(true); }
+    else if (e.key === 'Tab') { closePanel(false); }
+  });
+  document.addEventListener('mousedown', function (e) {
+    if (!panel.hidden && !e.target.closest('.picker')) closePanel(false);
+  });
+
+  // ---- number input ----
+  function setHint(text, isError) {
+    hint.textContent = text || '';
+    hint.className = isError ? 'error' : '';
+    input.setAttribute('aria-invalid', isError ? 'true' : 'false');
+  }
+
+  function reformat() {
+    var raw = input.value;
+    if (raw.trim().charAt(0) === '+') {
+      // International paste: derive the country from the number itself.
+      var intl = lib.parsePhoneNumberFromString(raw);
+      if (intl && intl.country && byIso[intl.country]) {
+        selected = byIso[intl.country];
+        renderButton();
+        input.value = intl.formatNational();
+        raw = input.value;
+      }
+    } else if (raw) {
+      input.value = new lib.AsYouType(selected.iso).input(raw);
+    }
+    var parsed = raw.trim() ? lib.parsePhoneNumberFromString(input.value, selected.iso) : null;
+    if (parsed && parsed.isValid()) setHint('Valid number: ' + parsed.number, false);
+    else setHint('', false);
+  }
+  input.addEventListener('input', function (e) {
+    // Do not fight the user while deleting.
+    if (e.inputType && e.inputType.indexOf('delete') === 0) { setHint('', false); return; }
+    reformat();
+  });
+  input.addEventListener('paste', function () { setTimeout(reformat, 0); });
+
+  // ---- submit ----
+  function esc(v) {
+    return String(v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function row(label, value) {
+    return '<dt>' + label + '</dt><dd>' + (value === null || value === undefined || value === '' ? '&ndash;' : value) + '</dd>';
+  }
+  function showError(message) {
+    resultBox.innerHTML = '<div class="error-box" role="alert">' + esc(message) + '</div>';
+  }
+  function showResult(r) {
+    var cls = r.status === 'VALID' ? 'valid' : 'invalid';
+    resultBox.innerHTML =
+      '<dl>' +
+      row('Status', '<span class="badge ' + cls + '">' + esc(r.status) + '</span>' +
+        (r.stale ? ' <span class="badge stale">stale</span>' : '')) +
+      row('Normalized (E.164)', esc(r.normalizedNumber)) +
+      row('Source', '<span class="badge">' + esc(r.source) + '</span>') +
+      row('National format', r.nationalFormat && esc(r.nationalFormat)) +
+      row('Line type', r.lineType && esc(r.lineType)) +
+      row('Carrier', r.carrier && esc(r.carrier)) +
+      row('Mobile', r.mobile ? 'yes' : 'no') +
+      row('Line status', r.lineStatus && esc(r.lineStatus.status)) +
+      row('Caller name', r.callerName && esc((r.callerName.callerName || '') + ' (' + (r.callerName.callerType || '') + ')')) +
+      row('Last SIM swap', r.simSwap && r.simSwap.lastSimSwap && esc(new Date(r.simSwap.lastSimSwap.lastSimSwapDate).toLocaleDateString())) +
+      row('Call forwarding', r.callForwarding && (r.callForwarding.callForwardingEnabled ? 'enabled' : 'disabled')) +
+      row('Reassigned', r.reassignedNumber && esc(r.reassignedNumber.isNumberReassigned)) +
+      row('SMS pumping risk', r.smsPumpingRisk && esc(r.smsPumpingRisk.carrierRiskCategory + ' (score ' + r.smsPumpingRisk.smsPumpingRiskScore + ')')) +
+      row('Checked at', r.checkedAt && esc(new Date(r.checkedAt).toLocaleString())) +
+      '</dl>';
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    resultBox.innerHTML = '';
+    var national = input.value.trim();
+    var parsed = national ? lib.parsePhoneNumberFromString(national, selected.iso) : null;
+    if (!parsed || !parsed.isValid()) {
+      setHint('Enter a valid phone number for ' + selected.name + '.', true);
+      input.focus();
+      return;
+    }
+    setHint('', false);
+    submit.disabled = true;
+    submit.textContent = 'Looking up...';
+    fetch('/api/v1/lookups/phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ phoneNumber: national, countryCode: selected.iso })
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+    }).then(function (out) {
+      if (out.ok) showResult(out.body);
+      else showError((out.body && out.body.message) || ('Request failed (' + out.status + ')'));
+    }).catch(function () {
+      showError('Could not reach the server.');
+    }).then(function () {
+      submit.disabled = false;
+      submit.textContent = 'Look up';
+    });
+  });
+
+  renderButton();
+})();
+</script>
+</body>
+</html>
