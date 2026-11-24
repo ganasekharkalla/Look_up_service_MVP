@@ -25,13 +25,7 @@ public class PhoneLookupDocument {
     @Indexed(unique = true)
     private String phoneE164;
 
-    private Boolean valid;
-    private String countryCode;
-    private String callingCountryCode;
-    private String nationalFormat;
-    private String lineType;
-    private String carrierName;
-    private Map<String, Object> rawTwilioPayload;
+    private Map<String, Object> veriphone;
     private Instant createdAt;
     private Instant updatedAt;
 }

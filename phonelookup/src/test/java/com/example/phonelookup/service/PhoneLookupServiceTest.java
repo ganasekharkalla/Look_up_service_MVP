@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,9 +25,10 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 
+import com.example.phonelookup.dto.NormalizedPhone;
 import com.example.phonelookup.dto.PhoneLookupRequest;
 import com.example.phonelookup.dto.PhoneLookupResponse;
-import com.example.phonelookup.dto.TwilioLookupResult;
+import com.example.phonelookup.dto.VeriphoneLookupResult;
 import com.example.phonelookup.exception.InvalidPhoneException;
 import com.example.phonelookup.model.PhoneLookupDocument;
 import com.example.phonelookup.repository.PhoneLookupRepository;
@@ -35,6 +37,7 @@ import com.example.phonelookup.repository.PhoneLookupRepository;
 class PhoneLookupServiceTest {
 
     private static final String E164 = "+919876543210";
+    private static final String PROVIDER = "http://127.0.0.1:8080";
 
     @Mock
     private PhoneSanitizerService phoneSanitizerService;
@@ -43,7 +46,7 @@ class PhoneLookupServiceTest {
     private PhoneLookupRepository phoneLookupRepository;
 
     @Mock
-    private TwilioProxyService twilioProxyService;
+    private VeriphoneProxyService veriphoneProxyService;
 
     @Mock
     private MongoTemplate mongoTemplate;
@@ -55,9 +58,10 @@ class PhoneLookupServiceTest {
         phoneLookupService = new PhoneLookupService(
                 phoneSanitizerService,
                 phoneLookupRepository,
-                twilioProxyService,
+                veriphoneProxyService,
                 mongoTemplate,
-                90);
+                90,
+                PROVIDER);
     }
 
     @Test
@@ -70,24 +74,19 @@ class PhoneLookupServiceTest {
                 .isInstanceOf(InvalidPhoneException.class)
                 .hasMessageContaining("Invalid phone number");
 
-        verifyNoInteractions(phoneLookupRepository, mongoTemplate, twilioProxyService);
+        verifyNoInteractions(phoneLookupRepository, mongoTemplate, veriphoneProxyService);
     }
 
     @Test
-    void freshDatabaseHitReturnsDatabaseSourceWithoutTwilio() {
+    void freshDatabaseHitReturnsDatabaseSourceWithoutVeriphone() {
         PhoneLookupRequest request = new PhoneLookupRequest("9876543210", "IN");
-        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(E164);
+        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(normalized());
 
         Instant updatedAt = Instant.now().minus(10, ChronoUnit.DAYS);
         Instant createdAt = Instant.now().minus(30, ChronoUnit.DAYS);
         PhoneLookupDocument document = PhoneLookupDocument.builder()
                 .phoneE164(E164)
-                .valid(true)
-                .countryCode("IN")
-                .callingCountryCode("91")
-                .nationalFormat("098765 43210")
-                .lineType("mobile")
-                .carrierName("Airtel")
+                .veriphone(samplePayload())
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .build();
@@ -97,83 +96,110 @@ class PhoneLookupServiceTest {
         PhoneLookupResponse response = phoneLookupService.lookup(request);
 
         assertThat(response.getSource()).isEqualTo("DATABASE");
+        assertThat(response.getAppliedRegion()).isEqualTo("IN");
+        assertThat(response.getRegionSource()).isEqualTo("REGION");
+        assertThat(response.getProvider()).isEqualTo(PROVIDER);
         assertThat(response.getPhoneE164()).isEqualTo(E164);
-        assertThat(response.getCarrierName()).isEqualTo("Airtel");
+        assertThat(response.getVeriphone()).containsEntry("carrier", "Airtel");
         assertThat(response.getUpdatedAt()).isEqualTo(updatedAt);
 
-        verifyNoInteractions(twilioProxyService);
+        verifyNoInteractions(veriphoneProxyService);
         verify(mongoTemplate, never()).upsert(any(Query.class), any(Update.class), eq(PhoneLookupDocument.class));
     }
 
     @Test
-    void missingDatabaseEntryCallsTwilioAndUpserts() {
+    void freshDocumentWithoutVeriphonePayloadCallsProvider() {
         PhoneLookupRequest request = new PhoneLookupRequest("9876543210", "IN");
-        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(E164);
-        when(phoneLookupRepository.findByPhoneE164(E164)).thenReturn(Optional.empty());
-
-        TwilioLookupResult twilioResult = sampleTwilioResult();
-        when(twilioProxyService.fetchPhoneDetails(E164)).thenReturn(twilioResult);
+        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(normalized());
+        when(phoneLookupRepository.findByPhoneE164(E164)).thenReturn(Optional.of(
+                PhoneLookupDocument.builder()
+                        .phoneE164(E164)
+                        .updatedAt(Instant.now())
+                        .build()));
+        when(veriphoneProxyService.fetchPhoneDetails(E164))
+                .thenReturn(VeriphoneLookupResult.builder().payload(samplePayload()).build());
 
         PhoneLookupResponse response = phoneLookupService.lookup(request);
 
-        assertThat(response.getSource()).isEqualTo("TWILIO");
-        assertThat(response.getPhoneE164()).isEqualTo(E164);
-        assertThat(response.getLineType()).isEqualTo("mobile");
-        assertThat(response.getCarrierName()).isEqualTo("Airtel");
+        assertThat(response.getSource()).isEqualTo("VERIPHONE");
+        verify(veriphoneProxyService).fetchPhoneDetails(E164);
+    }
 
-        verify(twilioProxyService).fetchPhoneDetails(E164);
+    @Test
+    void missingDatabaseEntryCallsVeriphoneAndUpserts() {
+        PhoneLookupRequest request = new PhoneLookupRequest("9876543210", "IN");
+        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(normalized());
+        when(phoneLookupRepository.findByPhoneE164(E164)).thenReturn(Optional.empty());
+        when(veriphoneProxyService.fetchPhoneDetails(E164))
+                .thenReturn(VeriphoneLookupResult.builder().payload(samplePayload()).build());
+
+        PhoneLookupResponse response = phoneLookupService.lookup(request);
+
+        assertThat(response.getSource()).isEqualTo("VERIPHONE");
+        assertThat(response.getPhoneE164()).isEqualTo(E164);
+        assertThat(response.getVeriphone()).containsEntry("phone_type", "mobile");
+        assertThat(response.getVeriphone()).containsEntry("country_code", "IN");
+        assertThat(response.getCreatedAt()).isNotNull();
+        assertThat(response.getUpdatedAt()).isEqualTo(response.getCreatedAt());
+
+        verify(veriphoneProxyService).fetchPhoneDetails(E164);
         ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
         ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
         verify(mongoTemplate).upsert(queryCaptor.capture(), updateCaptor.capture(), eq(PhoneLookupDocument.class));
         assertThat(queryCaptor.getValue().getQueryObject().get("phoneE164")).isEqualTo(E164);
-        assertThat(updateCaptor.getValue().getUpdateObject()).isNotEmpty();
+        assertThat(updateCaptor.getValue().getUpdateObject().toString()).contains("veriphone");
     }
 
     @Test
-    void staleDatabaseEntryCallsTwilioAndUpsertsInPlace() {
+    void staleDatabaseEntryCallsVeriphoneAndKeepsCreatedAt() {
         PhoneLookupRequest request = new PhoneLookupRequest("9876543210", "IN");
-        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(E164);
+        when(phoneSanitizerService.sanitizeAndFormatE164("9876543210", "IN")).thenReturn(normalized());
 
+        Instant createdAt = Instant.now().minus(200, ChronoUnit.DAYS);
         PhoneLookupDocument staleDocument = PhoneLookupDocument.builder()
                 .phoneE164(E164)
-                .valid(true)
-                .countryCode("IN")
-                .callingCountryCode("91")
-                .nationalFormat("098765 43210")
-                .lineType("mobile")
-                .carrierName("OldCarrier")
-                .createdAt(Instant.now().minus(200, ChronoUnit.DAYS))
+                .veriphone(Map.of("carrier", "OldCarrier"))
+                .createdAt(createdAt)
                 .updatedAt(Instant.now().minus(95, ChronoUnit.DAYS))
                 .build();
 
         when(phoneLookupRepository.findByPhoneE164(E164)).thenReturn(Optional.of(staleDocument));
-        when(twilioProxyService.fetchPhoneDetails(E164)).thenReturn(sampleTwilioResult());
+        when(veriphoneProxyService.fetchPhoneDetails(E164))
+                .thenReturn(VeriphoneLookupResult.builder().payload(samplePayload()).build());
 
         PhoneLookupResponse response = phoneLookupService.lookup(request);
 
-        assertThat(response.getSource()).isEqualTo("TWILIO");
-        assertThat(response.getCarrierName()).isEqualTo("Airtel");
+        assertThat(response.getSource()).isEqualTo("VERIPHONE");
+        assertThat(response.getCreatedAt()).isEqualTo(createdAt);
+        assertThat(response.getVeriphone()).containsEntry("carrier", "Airtel");
 
-        verify(twilioProxyService).fetchPhoneDetails(E164);
+        verify(veriphoneProxyService).fetchPhoneDetails(E164);
         verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(PhoneLookupDocument.class));
     }
 
-    private TwilioLookupResult sampleTwilioResult() {
-        return TwilioLookupResult.builder()
-                .valid(true)
-                .countryCode("IN")
-                .callingCountryCode("91")
-                .nationalFormat("098765 43210")
-                .lineType("mobile")
-                .carrierName("Airtel")
-                .rawTwilioPayload(Map.of(
-                        "valid", true,
-                        "country_code", "IN",
-                        "calling_country_code", "91",
-                        "national_format", "098765 43210",
-                        "line_type_intelligence", Map.of(
-                                "type", "mobile",
-                                "carrier_name", "Airtel")))
+    private NormalizedPhone normalized() {
+        return NormalizedPhone.builder()
+                .phoneE164(E164)
+                .requestedRegion("IN")
+                .appliedRegion("IN")
+                .regionSource("REGION")
                 .build();
+    }
+
+    private Map<String, Object> samplePayload() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("status", "success");
+        payload.put("phone", E164);
+        payload.put("phone_valid", true);
+        payload.put("phone_type", "mobile");
+        payload.put("phone_region", "India");
+        payload.put("country", "India");
+        payload.put("country_code", "IN");
+        payload.put("country_prefix", "91");
+        payload.put("international_number", "+91 98765 43210");
+        payload.put("local_number", "098765 43210");
+        payload.put("e164", E164);
+        payload.put("carrier", "Airtel");
+        return payload;
     }
 }
