@@ -529,6 +529,14 @@ Docker must be running. The tests start `mongo:7.0` through Testcontainers and s
 
 Mongo integration tests will extend a shared base class, `AbstractMongoIntegrationTest`, in `src/test/java/com/twilio/lookup/`, once it is added. Do not add a test copy of `application.properties`, because it would shadow the main one.
 
+### What is stored
+
+`PhoneLookup.result` (`PhoneResult`) holds the basic Lookup v2 fields plus one optional object per data package: `line_type_intelligence`, `line_status`, `caller_name`, `sim_swap`, `call_forwarding`, `reassigned_number`, `sms_pumping_risk` and `phone_number_quality_score`. A package object is `null` unless that package was requested, so the stored document stays small. Adding a package needs no Mongo migration.
+
+`EmailLookup.result` (`EmailResult`) holds every field SendGrid returns that we keep: `local`, `host`, `suggestion` and the three `checks` groups, with `verdict` and `score` on the document itself.
+
+Not stored, to protect privacy and per the team plan: `identity_match` and `pre_fill` results, the phone `url`, the email `ip_address`, and the echoed email `source`. The phone number and email address are the document `_id`, so they are not repeated in `result`.
+
 ### Package overview
 
 | Package | Contents | Owner |

@@ -8,6 +8,7 @@ import com.twilio.lookup.model.PhoneResult;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,85 @@ class PhoneLookupRepositoryTests extends AbstractMongoIntegrationTest {
 		assertThat(line.getMobileCountryCode()).isEqualTo("240");
 		assertThat(line.getMobileNetworkCode()).isEqualTo("38");
 		assertThat(line.getErrorCode()).isNull();
+
+		// packages that were not requested stay null
+		assertThat(found.getResult().getLineStatus()).isNull();
+		assertThat(found.getResult().getCallerName()).isNull();
+		assertThat(found.getResult().getSimSwap()).isNull();
+		assertThat(found.getResult().getCallForwarding()).isNull();
+		assertThat(found.getResult().getReassignedNumber()).isNull();
+		assertThat(found.getResult().getSmsPumpingRisk()).isNull();
+		assertThat(found.getResult().getPhoneNumberQualityScore()).isNull();
+	}
+
+	@Test
+	void storesAllOptionalPackages() {
+		Instant swapDate = Instant.parse("2026-11-01T10:15:30Z");
+		Instant blockedDate = Instant.parse("2026-10-05T08:00:00Z");
+		PhoneLookup lookup = newLookup(Instant.now());
+		PhoneResult result = lookup.getResult();
+
+		PhoneResult.LineStatus lineStatus = new PhoneResult.LineStatus();
+		lineStatus.setStatus("active");
+		result.setLineStatus(lineStatus);
+
+		PhoneResult.CallerName callerName = new PhoneResult.CallerName();
+		callerName.setCallerName("Delicious Cheese Cake");
+		callerName.setCallerType("CONSUMER");
+		result.setCallerName(callerName);
+
+		PhoneResult.LastSimSwap lastSimSwap = new PhoneResult.LastSimSwap();
+		lastSimSwap.setLastSimSwapDate(swapDate);
+		lastSimSwap.setSwappedPeriod("PT24H");
+		lastSimSwap.setSwappedInPeriod(true);
+		PhoneResult.SimSwap simSwap = new PhoneResult.SimSwap();
+		simSwap.setLastSimSwap(lastSimSwap);
+		simSwap.setCarrierName("Vodafone");
+		simSwap.setMobileCountryCode("234");
+		simSwap.setMobileNetworkCode("15");
+		result.setSimSwap(simSwap);
+
+		PhoneResult.CallForwarding callForwarding = new PhoneResult.CallForwarding();
+		callForwarding.setCallForwardingEnabled(false);
+		result.setCallForwarding(callForwarding);
+
+		PhoneResult.ReassignedNumber reassigned = new PhoneResult.ReassignedNumber();
+		reassigned.setLastVerifiedDate("20201227");
+		reassigned.setIsNumberReassigned("yes");
+		result.setReassignedNumber(reassigned);
+
+		PhoneResult.SmsPumpingRisk risk = new PhoneResult.SmsPumpingRisk();
+		risk.setCarrierRiskCategory("low");
+		risk.setNumberBlocked(true);
+		risk.setNumberBlockedDate(blockedDate);
+		risk.setNumberBlockedLast3Months(true);
+		risk.setSmsPumpingRiskScore(42);
+		result.setSmsPumpingRisk(risk);
+
+		result.setPhoneNumberQualityScore(Map.of("score", 85));
+
+		repository.save(lookup);
+		PhoneResult found = repository.findById(NUMBER).orElseThrow().getResult();
+
+		assertThat(found.getLineStatus().getStatus()).isEqualTo("active");
+		assertThat(found.getLineStatus().getErrorCode()).isNull();
+		assertThat(found.getCallerName().getCallerName()).isEqualTo("Delicious Cheese Cake");
+		assertThat(found.getCallerName().getCallerType()).isEqualTo("CONSUMER");
+		assertThat(found.getSimSwap().getLastSimSwap().getLastSimSwapDate()).isEqualTo(swapDate);
+		assertThat(found.getSimSwap().getLastSimSwap().getSwappedPeriod()).isEqualTo("PT24H");
+		assertThat(found.getSimSwap().getLastSimSwap().getSwappedInPeriod()).isTrue();
+		assertThat(found.getSimSwap().getCarrierName()).isEqualTo("Vodafone");
+		assertThat(found.getSimSwap().getMobileCountryCode()).isEqualTo("234");
+		assertThat(found.getSimSwap().getMobileNetworkCode()).isEqualTo("15");
+		assertThat(found.getCallForwarding().getCallForwardingEnabled()).isFalse();
+		assertThat(found.getReassignedNumber().getLastVerifiedDate()).isEqualTo("20201227");
+		assertThat(found.getReassignedNumber().getIsNumberReassigned()).isEqualTo("yes");
+		assertThat(found.getSmsPumpingRisk().getCarrierRiskCategory()).isEqualTo("low");
+		assertThat(found.getSmsPumpingRisk().getNumberBlocked()).isTrue();
+		assertThat(found.getSmsPumpingRisk().getNumberBlockedDate()).isEqualTo(blockedDate);
+		assertThat(found.getSmsPumpingRisk().getNumberBlockedLast3Months()).isTrue();
+		assertThat(found.getSmsPumpingRisk().getSmsPumpingRiskScore()).isEqualTo(42);
+		assertThat(found.getPhoneNumberQualityScore()).containsEntry("score", 85);
 	}
 
 	@Test
