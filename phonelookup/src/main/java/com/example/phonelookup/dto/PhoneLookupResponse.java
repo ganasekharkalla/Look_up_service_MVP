@@ -1,6 +1,7 @@
 package com.example.phonelookup.dto;
 
 import java.time.Instant;
+import java.util.Map;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,13 +15,12 @@ import lombok.NoArgsConstructor;
 public class PhoneLookupResponse {
 
     private String phoneE164;
-    private Boolean valid;
-    private String countryCode;
-    private String callingCountryCode;
-    private String nationalFormat;
-    private String lineType;
-    private String carrierName;
+    private String requestedRegion;
+    private String appliedRegion;
+    private String regionSource;
     private String source;
+    private String provider;
     private Instant createdAt;
     private Instant updatedAt;
+    private Map<String, Object> veriphone;
 }

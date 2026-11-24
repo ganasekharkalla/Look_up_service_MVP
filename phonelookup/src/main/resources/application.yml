@@ -5,15 +5,27 @@ server:
       max: 300
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 256KB
+      max-request-size: 256KB
   data:
     mongodb:
       uri: mongodb://localhost:27017/phone_lookup_db?maxPoolSize=100
       auto-index-creation: true
 
-twilio:
-  base-url: ${TWILIO_BASE_URL:https://lookups.twilio.com}
-  account-sid: ${TWILIO_ACCOUNT_SID:test_sid}
-  auth-token: ${TWILIO_AUTH_TOKEN:test_token}
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+veriphone:
+  # Default points at the in-app mock. For the real API, set:
+  # VERIPHONE_BASE_URL=https://api.veriphone.io
+  # VERIPHONE_API_KEY=<your key>
+  base-url: ${VERIPHONE_BASE_URL:http://127.0.0.1:8080}
+  api-key: ${VERIPHONE_API_KEY:}
+  connect-timeout-ms: ${VERIPHONE_CONNECT_TIMEOUT_MS:3000}
+  read-timeout-ms: ${VERIPHONE_READ_TIMEOUT_MS:5000}
 
 lookup:
   freshness-days: 90
