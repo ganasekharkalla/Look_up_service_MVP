@@ -197,6 +197,16 @@
     input.setAttribute('aria-invalid', isError ? 'true' : 'false');
   }
 
+  function digitsOf(text) { return text.replace(/\D/g, ''); }
+  var lastDigits = '';
+
+  function showHint() {
+    var value = input.value.trim();
+    var parsed = value ? lib.parsePhoneNumberFromString(value, selected.iso) : null;
+    if (parsed && parsed.isValid()) setHint('Valid number: ' + parsed.number, false);
+    else setHint('', false);
+  }
+
   function reformat() {
     var raw = input.value;
     if (raw.trim().charAt(0) === '+') {
@@ -211,14 +221,34 @@
     } else if (raw) {
       input.value = new lib.AsYouType(selected.iso).input(raw);
     }
-    var parsed = raw.trim() ? lib.parsePhoneNumberFromString(input.value, selected.iso) : null;
-    if (parsed && parsed.isValid()) setHint('Valid number: ' + parsed.number, false);
-    else setHint('', false);
+    showHint();
+    lastDigits = digitsOf(input.value);
   }
+
+  /*
+   * Deleting: rebuild the formatting from the remaining digits so it comes back after an over-long number is
+   * trimmed, and refresh the hint. If only a separator was removed (a space or bracket), reformatting would put it
+   * straight back and backspace would feel stuck, so the digit before it is dropped as well. Edits in the middle of
+   * the text, or in a "+" number, keep the text as typed (no caret jump) and only refresh the hint.
+   */
+  function onDelete() {
+    var value = input.value;
+    var atEnd = input.selectionStart === value.length;
+    if (value.trim().charAt(0) === '+' || !atEnd) {
+      showHint();
+      lastDigits = digitsOf(value);
+      return;
+    }
+    var digits = digitsOf(value);
+    if (digits === lastDigits) digits = digits.slice(0, -1);
+    input.value = digits ? new lib.AsYouType(selected.iso).input(digits) : '';
+    showHint();
+    lastDigits = digitsOf(input.value);
+  }
+
   input.addEventListener('input', function (e) {
-    // Do not fight the user while deleting.
-    if (e.inputType && e.inputType.indexOf('delete') === 0) { setHint('', false); return; }
-    reformat();
+    if (e.inputType && e.inputType.indexOf('delete') === 0) onDelete();
+    else reformat();
   });
   input.addEventListener('paste', function () { setTimeout(reformat, 0); });
 
