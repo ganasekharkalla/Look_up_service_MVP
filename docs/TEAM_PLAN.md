@@ -1,6 +1,6 @@
 # Lookup Service v1: Team Plan
 
-This is the single source of truth for the four-member build. Every agent reads the **Common** section and then only its own member section. [AGENTS.md](AGENTS.md) explains how each agent finds its member number. The design background (schema, Twilio and SendGrid details, errors) is in [README.md](README.md).
+This is the single source of truth for the four-member build. Every agent reads the **Common** section and then only its own member section. [AGENTS.md](../AGENTS.md) explains how each agent finds its member number. The design background (schema, Twilio and SendGrid details, errors) is in [DESIGN.md](DESIGN.md). The project overview is in the [root README](../README.md).
 
 Goal: all four members build in parallel against the same contracts, and the code fits together with no design changes.
 
@@ -23,7 +23,7 @@ Goal: all four members build in parallel against the same contracts, and the cod
 | --- | --- | --- |
 | Phone slice | `controller/PhoneLookupController`, `dto/PhoneLookupRequest`, `dto/PhoneLookupResponse`, `util/PhoneNormalizer`, `service/PhoneLookupService` | Member 1 |
 | Email slice | `controller/EmailLookupController`, `dto/EmailLookupRequest`, `dto/EmailLookupResponse`, `util/EmailNormalizer`, `service/EmailLookupService` | Member 2 |
-| Foundation | `pom.xml`, `src/main/resources/application.properties`, `LookupServiceApplication` (package root), `config/LookupProperties`, `config/MongoConfig`, `config/ClockConfig`, `dto/LookupStatus`, `dto/LookupSource`, `model/*`, `repository/*`, `service/StalenessPolicy`, test base class, `README.md` developer section, springdoc | Member 3 |
+| Foundation | `pom.xml`, `src/main/resources/application.properties`, `LookupServiceApplication` (package root), `config/LookupProperties`, `config/MongoConfig`, `config/ClockConfig`, `dto/LookupStatus`, `dto/LookupSource`, `model/*`, `repository/*`, `service/StalenessPolicy`, test base class, `DESIGN.md` developer guide, springdoc | Member 3 |
 | Providers and errors | `provider/*` (interfaces, response records, mappers, mocks), `config/ProviderProperties`, `exception/*`, `dto/ApiError`, `GlobalExceptionHandler`, `config/LookupLoggingAdvice`, actuator health | Member 4 |
 
 Rule: if you need a change in a file you do not own, ask its owner or send them a small PR. Do not edit their file directly.
@@ -34,7 +34,7 @@ Rule: if you need a change in a file you do not own, ask its owner or send them 
 2. `normalizer.normalize(...)` returns `Optional<String>`. If empty, the service throws `InvalidLookupException`, which gives 400 with `ApiError`. Nothing is read or stored, and no provider call is made.
 3. `repository.findById(normalized)`. If the record exists and `!stalenessPolicy.isStale(checkedAt)`, return it with `source=DATABASE`, `stale=false`.
 4. Otherwise call `provider.lookup(normalized)`, then `mapper.toEntity(normalized, response, existingOrNull)`, then `repository.save(...)`. Return with `source=PROVIDER`, `stale=false`.
-5. If the provider throws and an older record exists, return that record with `source=DATABASE`, `stale=true`. This follows the README "Errors" table. If no record exists, rethrow. The handler maps the exception. Nothing is saved on failure.
+5. If the provider throws and an older record exists, return that record with `source=DATABASE`, `stale=true`. This follows the "Errors" table in DESIGN.md. If no record exists, rethrow. The handler maps the exception. Nothing is saved on failure.
 6. Only provider-backed results are ever saved.
 
 ### Status mapping
@@ -133,7 +133,7 @@ All errors use `ApiError`. A provider failure with a stale record returns 200 wi
 
 ### Starting point
 
-- The repository starts with only `LookupServiceApplication`, the context test, `pom.xml`, `application.properties` and these docs. There are no stubs and no `TODO(Member N)` markers.
+- The repository started with only `LookupServiceApplication`, the context test, `pom.xml`, `application.properties` and the docs. There were no stubs and no `TODO(Member N)` markers. The single-request scaffold is now complete on this branch; this section is kept for history.
 - Each member creates their own files from the ownership table, using the names, signatures and types in Common and in "Integration details".
 - Until Member 3 and Member 4 merge their contracts, Members 1 and 2 can write against the signatures in Common, but their code compiles only after those merges.
 
@@ -167,11 +167,11 @@ Members 1 and 2 can start before step 3, but they merge after it so the project 
 - `PhoneLookup` holds `PhoneResult result`. `PhoneResult` holds `PhoneResult.LineTypeIntelligence lineTypeIntelligence`.
 - `EmailLookup` holds `EmailResult result`. `EmailResult` holds `EmailResult.Checks checks`, which holds `Domain domain`, `LocalPart localPart` and `Additional additional`, all nested in `EmailResult`.
 - Types: instants are `Instant`, `score` is `double`, flags are primitive `boolean`, `packages` and `validationErrors` are `List<String>`.
-- Stored field names are the Java camelCase names. The snake_case in README documents is illustrative.
+- Stored field names are the Java camelCase names. The snake_case in DESIGN.md documents is illustrative.
 
-**Provider records** (Member 4, in `provider/`; they mirror the README JSON in camelCase)
+**Provider records** (Member 4, in `provider/`; they mirror the DESIGN.md JSON in camelCase)
 - `ProviderPhoneResponse` nests `LineTypeIntelligence(type, carrierName, mobileCountryCode, mobileNetworkCode, errorCode)`.
-- `ProviderEmailResponse` nests `Checks(Domain domain, LocalPart localPart, Additional additional)`. `Domain`, `LocalPart` and `Additional` carry the booleans named in the README table.
+- `ProviderEmailResponse` nests `Checks(Domain domain, LocalPart localPart, Additional additional)`. `Domain`, `LocalPart` and `Additional` carry the booleans named in the DESIGN.md table.
 - `score` is `double`, `valid` is `boolean`, `validationErrors` is `List<String>`.
 - The mocks build these in Java. snake_case mapping is the job of the real clients later.
 
@@ -236,7 +236,7 @@ Members 1 and 2 can start before step 3, but they merge after it so the project 
 
 ## Member 3: Foundation and persistence
 
-**Owns:** `pom.xml`, `application.properties`, `LookupServiceApplication`, `LookupProperties`, `MongoConfig`, `ClockConfig`, enums, `model/*`, `repository/*`, `StalenessPolicy`, the test base class, the Mongo integration tests, springdoc, and the README developer section.
+**Owns:** `pom.xml`, `application.properties`, `LookupServiceApplication`, `LookupProperties`, `MongoConfig`, `ClockConfig`, enums, `model/*`, `repository/*`, `StalenessPolicy`, the test base class, the Mongo integration tests, springdoc, and the DESIGN.md developer guide.
 
 **Tasks**
 - `pom.xml`: Boot 4.2.0 starters (`webmvc`, `validation`, `mongodb`, `actuator`, and their test starters), `libphonenumber` 9.0.44, optional Lombok, springdoc 3.2.1 (drop it if the context fails on Boot 4.2). Comment: retry and backoff will be added by the provider owner. Spring Framework 7 core retry may be enough.
@@ -245,7 +245,7 @@ Members 1 and 2 can start before step 3, but they merge after it so the project 
 - `StalenessPolicy.isStale`: `checkedAt` plus `stalenessTtlDays`, compared against `Clock.instant()`.
 - Entities and repositories exactly as listed under Common. `MongoRepository<..., String>`, no custom queries. No TTL index.
 - Tests: `AbstractMongoIntegrationTest` (`@SpringBootTest`, `@TestPropertySource` with the zero mock rates and short retry backoff, static `@Container @ServiceConnection MongoDBContainer("mongo:7.0")`), a `contextLoads` test, repository integration tests (save, find, `@Version` bump, audit fields set).
-- Springdoc config, and the README developer section (how to run, how to test with Docker, package overview, ownership table). Leave the design content of `README.md` as it is.
+- Springdoc config, and the developer guide in `DESIGN.md` (how to run, how to test with Docker, package overview, ownership table). Leave the design content of `DESIGN.md` as it is.
 
 **Merges first.** Others depend on your entities, repositories and properties classes.
 
@@ -258,7 +258,7 @@ Members 1 and 2 can start before step 3, but they merge after it so the project 
 **Owns:** `provider/*`, `ProviderProperties`, `exception/*`, `ApiError`, `GlobalExceptionHandler`, `LookupLoggingAdvice`, actuator health, and the retry tests.
 
 **Tasks**
-- Provider response records: `ProviderPhoneResponse` (`callingCountryCode`, `countryCode`, `phoneNumber`, `nationalFormat`, `valid`, `validationErrors`, `lineTypeIntelligence`, `url`) and `ProviderEmailResponse` (`email`, `verdict`, `score`, `local`, `host`, `suggestion`, `checks`, `ipAddress`, `source`), both mirroring the README JSON.
+- Provider response records: `ProviderPhoneResponse` (`callingCountryCode`, `countryCode`, `phoneNumber`, `nationalFormat`, `valid`, `validationErrors`, `lineTypeIntelligence`, `url`) and `ProviderEmailResponse` (`email`, `verdict`, `score`, `local`, `host`, `suggestion`, `checks`, `ipAddress`, `source`), both mirroring the DESIGN.md JSON.
 - Mock providers: `MockPhoneLookupProvider` and `MockEmailLookupProvider`. Twilio-shaped and SendGrid-shaped responses, configurable failure rate, latency and permanent-failure rate, all zero in tests. Deterministic when the rates are zero.
 - `PhoneProviderMapper` and `EmailProviderMapper`, per the rules in Common.
 - Strict timeout on every provider call (`provider.timeout-ms`).

@@ -53,18 +53,27 @@ public class PhoneProviderMapper {
 		return entity;
 	}
 
-	/** Names of the packages that came back, in Twilio's snake_case. Empty when only basic data was returned. */
+	/**
+	 * Names of the packages that came back with data, in Twilio's snake_case. Empty when only basic data was returned.
+	 * A package that Twilio returned with an {@code error_code} (for example an unsupported country) carries no data and
+	 * is not billed, so it is not listed here. The package object itself is still stored, error code included.
+	 */
 	private static List<String> packages(PhoneResult result) {
 		List<String> packages = new ArrayList<>();
-		if (result.getLineTypeIntelligence() != null) packages.add("line_type_intelligence");
-		if (result.getLineStatus() != null) packages.add("line_status");
-		if (result.getCallerName() != null) packages.add("caller_name");
-		if (result.getSimSwap() != null) packages.add("sim_swap");
-		if (result.getCallForwarding() != null) packages.add("call_forwarding");
-		if (result.getReassignedNumber() != null) packages.add("reassigned_number");
-		if (result.getSmsPumpingRisk() != null) packages.add("sms_pumping_risk");
+		PhoneResult.LineTypeIntelligence lineType = result.getLineTypeIntelligence();
+		if (lineType != null && noError(lineType.getErrorCode())) packages.add("line_type_intelligence");
+		if (result.getLineStatus() != null && noError(result.getLineStatus().getErrorCode())) packages.add("line_status");
+		if (result.getCallerName() != null && noError(result.getCallerName().getErrorCode())) packages.add("caller_name");
+		if (result.getSimSwap() != null && noError(result.getSimSwap().getErrorCode())) packages.add("sim_swap");
+		if (result.getCallForwarding() != null && noError(result.getCallForwarding().getErrorCode())) packages.add("call_forwarding");
+		if (result.getReassignedNumber() != null && noError(result.getReassignedNumber().getErrorCode())) packages.add("reassigned_number");
+		if (result.getSmsPumpingRisk() != null && noError(result.getSmsPumpingRisk().getErrorCode())) packages.add("sms_pumping_risk");
 		if (result.getPhoneNumberQualityScore() != null) packages.add("phone_number_quality_score");
 		return packages;
+	}
+
+	private static boolean noError(Object errorCode) {
+		return errorCode == null || errorCode.toString().isBlank();
 	}
 
 	private static PhoneResult.LineTypeIntelligence lineType(ProviderPhoneResponse.LineTypeIntelligence p) {

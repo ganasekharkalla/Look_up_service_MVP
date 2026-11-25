@@ -66,6 +66,24 @@ class PhoneProviderMapperTests {
 	}
 
 	@Test
+	void packageReturnedWithErrorCodeIsStoredButNotListed() {
+		ProviderPhoneResponse unsupported = new ProviderPhoneResponse("44", "GB", "+447911123456", "07911 123456", true, List.of(),
+				new ProviderPhoneResponse.LineTypeIntelligence("mobile", "Mock Wireless", "234", "10", null),
+				new ProviderPhoneResponse.LineStatus(null, 60607),
+				new ProviderPhoneResponse.CallerName(null, null, 60607),
+				null, null,
+				new ProviderPhoneResponse.ReassignedNumber(null, null, "60607"),
+				null, null, "https://example/url");
+
+		PhoneLookup entity = mapper.toEntity("+447911123456", unsupported, null);
+
+		assertThat(entity.getPackages()).containsExactly("line_type_intelligence");
+		assertThat(entity.getResult().getLineStatus().getErrorCode()).isEqualTo(60607);
+		assertThat(entity.getResult().getCallerName().getErrorCode()).isEqualTo(60607);
+		assertThat(entity.getResult().getReassignedNumber().getErrorCode()).isEqualTo("60607");
+	}
+
+	@Test
 	void mapsEveryPackageAndListsThem() {
 		Instant swap = Instant.parse("2025-02-03T00:00:00Z");
 		ProviderPhoneResponse full = new ProviderPhoneResponse("1", "US", "+14159929960", "(415) 992-9960", true, List.of(),
