@@ -80,4 +80,17 @@ class PhoneLookupEndToEndTests extends AbstractMongoIntegrationTest {
 	void nationalNumberWithoutCountryIs400() throws Exception {
 		postJson("{\"phoneNumber\":\"4159929960\"}").andExpect(status().isBadRequest());
 	}
+
+	@Test
+	void plusNumberWinsOverMismatchedCountryCode() throws Exception {
+		postJson("{\"phoneNumber\":\"+14159929960\",\"countryCode\":\"DE\"}").andExpect(status().isOk())
+				.andExpect(jsonPath("$.normalizedNumber").value("+14159929960"))
+				.andExpect(jsonPath("$.countryCode").value("US"));
+	}
+
+	@Test
+	void invalidPlusNumberWithCountryCodeIs400() throws Exception {
+		postJson("{\"phoneNumber\":\"+141599299600\",\"countryCode\":\"US\"}").andExpect(status().isBadRequest());
+		org.assertj.core.api.Assertions.assertThat(repository.count()).isZero();
+	}
 }

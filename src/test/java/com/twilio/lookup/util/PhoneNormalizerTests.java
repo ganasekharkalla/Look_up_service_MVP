@@ -47,4 +47,26 @@ class PhoneNormalizerTests {
 	void garbage() {
 		assertThat(normalizer.normalize("not a number", "US")).isEmpty();
 	}
+
+	@Test
+	void nationalNumberUsesCountryHint() {
+		assertThat(normalizer.normalize("4159929960", "US")).contains("+14159929960");
+	}
+
+	@Test
+	void plusNumberIgnoresConflictingCountryHint() {
+		// The + prefix fixes the country, so a hint for another region must not change the result.
+		assertThat(normalizer.normalize("+14159929960", "DE")).contains("+14159929960");
+	}
+
+	@Test
+	void invalidPlusNumberIsNotRescuedByCountryHint() {
+		assertThat(normalizer.normalize("+141599299600", "US")).isEmpty();
+		assertThat(normalizer.normalize("+141599299600", "DE")).isEmpty();
+	}
+
+	@Test
+	void invalidNationalNumberForHintIsEmpty() {
+		assertThat(normalizer.normalize("123", "US")).isEmpty();
+	}
 }
