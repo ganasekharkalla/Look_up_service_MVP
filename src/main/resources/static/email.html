@@ -52,10 +52,17 @@
       submit = document.getElementById('submit-btn'),
       resultBox = document.getElementById('result');
 
-  // Basic local check only. The backend normalizer is the authority.
+  var MIN_TLD_LENGTH = 2;
+  var HINT_TEXT = 'Enter an address like name@example.com (the part after the last dot needs at least 2 characters).';
+
+  // Basic local check only. The backend normalizer is the authority. The domain needs a dot with a
+  // top-level domain of at least MIN_TLD_LENGTH characters after the last one.
   function looksValid(value) {
     var at = value.indexOf('@');
-    return at > 0 && at === value.lastIndexOf('@') && at < value.length - 1 && value.indexOf(' ') < 0;
+    if (!(at > 0 && at === value.lastIndexOf('@') && at < value.length - 1 && value.indexOf(' ') < 0)) return false;
+    var domain = value.slice(at + 1);
+    var lastDot = domain.lastIndexOf('.');
+    return lastDot > 0 && domain.length - lastDot - 1 >= MIN_TLD_LENGTH;
   }
 
   function esc(v) {
@@ -94,7 +101,7 @@
     var v = input.value.trim();
     var bad = v !== '' && !looksValid(v);
     input.setAttribute('aria-invalid', bad ? 'true' : 'false');
-    hint.textContent = bad ? 'Enter an address like name@example.com.' : '';
+    hint.textContent = bad ? HINT_TEXT : '';
     hint.className = bad ? 'error' : '';
   });
 
@@ -104,7 +111,7 @@
     var email = input.value.trim();
     if (!looksValid(email)) {
       input.setAttribute('aria-invalid', 'true');
-      hint.textContent = 'Enter an address like name@example.com.';
+      hint.textContent = HINT_TEXT;
       hint.className = 'error';
       input.focus();
       return;

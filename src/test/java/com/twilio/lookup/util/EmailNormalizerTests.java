@@ -36,4 +36,27 @@ class EmailNormalizerTests {
 		assertThat(normalizer.normalize("jane@")).isEmpty();
 		assertThat(normalizer.normalize("jane@  ")).isEmpty();
 	}
+
+	@Test
+	void tldOfTwoOrMoreCharactersIsAccepted() {
+		assertThat(normalizer.normalize("jane@example.co")).contains("jane@example.co");
+		assertThat(normalizer.normalize("jane@mail.example.com")).contains("jane@mail.example.com");
+	}
+
+	@Test
+	void tldShorterThanTwoCharactersIsRejected() {
+		assertThat(normalizer.normalize("jane@example.c")).isEmpty();
+	}
+
+	@Test
+	void domainWithoutDotHasNoTld() {
+		assertThat(normalizer.normalize("jane@nodot")).isEmpty();
+		assertThat(normalizer.normalize("jane@localhost")).isEmpty();
+	}
+
+	@Test
+	void emptyOrMisplacedTldDotIsRejected() {
+		assertThat(normalizer.normalize("jane@example.")).isEmpty();
+		assertThat(normalizer.normalize("jane@.com")).isEmpty();
+	}
 }

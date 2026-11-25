@@ -54,10 +54,18 @@ class EmailLookupEndToEndTests extends AbstractMongoIntegrationTest {
 	}
 
 	@Test
-	void providerInvalidVerdictIs200Invalid() throws Exception {
-		postJson("{\"email\":\"jane@nodot\"}").andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("INVALID"))
-				.andExpect(jsonPath("$.verdict").value("Invalid"));
+	void tldShorterThanTwoCharactersIs400AndNothingStored() throws Exception {
+		postJson("{\"email\":\"jane@example.c\"}").andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.status").value(400));
+		postJson("{\"email\":\"jane@nodot\"}").andExpect(status().isBadRequest());
+		postJson("{\"email\":\"jane@example.\"}").andExpect(status().isBadRequest());
+		org.assertj.core.api.Assertions.assertThat(repository.count()).isZero();
+	}
+
+	@Test
+	void twoCharacterTldIsAccepted() throws Exception {
+		postJson("{\"email\":\"jane@example.co\"}").andExpect(status().isOk())
+				.andExpect(jsonPath("$.normalizedEmail").value("jane@example.co"));
 	}
 
 	@Test

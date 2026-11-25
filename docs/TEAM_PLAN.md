@@ -222,7 +222,7 @@ Members 1 and 2 can start before step 3, but they merge after it so the project 
 **Tasks**
 - `EmailLookupController`: `POST /api/v1/lookups/email`, same pattern as phone.
 - `EmailLookupRequest`: `@NotBlank @Email email`.
-- `EmailNormalizer`: trims the value, lowercases it, and rejects input without exactly one `@` or with a blank local part or domain. Returns empty when rejected.
+- `EmailNormalizer`: trims the value, lowercases it, and rejects input without exactly one `@`, with a blank local part or domain, or whose domain has no top-level domain of at least 2 characters (the part after the last dot). `EmailLookupRequest` enforces the same TLD rule with `@Pattern`, and `email.html` mirrors it. Returns empty when rejected.
 - `EmailLookupService`: same flow as phone, with `EmailLookupRepository`, `EmailLookupProvider` and `EmailProviderMapper`.
 - Unit tests: the normalizer (case and whitespace, missing `@`, two `@`, blank) and the service.
 - End-to-end test: mirrors the phone test for email.

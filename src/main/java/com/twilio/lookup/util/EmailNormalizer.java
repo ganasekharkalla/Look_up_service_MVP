@@ -8,9 +8,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class EmailNormalizer {
 
+	/** The part of the domain after the last dot must be at least this long. */
+	static final int MIN_TLD_LENGTH = 2;
+
 	/**
 	 * @param rawEmail address as typed
-	 * @return the normalized address, or empty if it is blank or does not have exactly one @ with text on both sides
+	 * @return the normalized address, or empty if it is blank, does not have exactly one @ with text on both sides,
+	 *         or its domain has no top-level domain of at least {@value #MIN_TLD_LENGTH} characters
 	 */
 	public Optional<String> normalize(String rawEmail) {
 		if (rawEmail == null) {
@@ -26,6 +30,15 @@ public class EmailNormalizer {
 		if (local.isBlank() || domain.isBlank()) {
 			return Optional.empty();
 		}
+		if (!hasValidTld(domain)) {
+			return Optional.empty();
+		}
 		return Optional.of(email);
+	}
+
+	/** True when the domain has a dot with a non-empty name before it and at least {@link #MIN_TLD_LENGTH} characters after the last one. */
+	private static boolean hasValidTld(String domain) {
+		int lastDot = domain.lastIndexOf('.');
+		return lastDot > 0 && domain.length() - lastDot - 1 >= MIN_TLD_LENGTH;
 	}
 }
