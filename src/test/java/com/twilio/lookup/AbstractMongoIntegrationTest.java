@@ -8,7 +8,7 @@ import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Base class for tests that need a real MongoDB. Starts one {@code mongo:7.0} container for the whole test JVM
+ * Base class for tests that need a real MongoDB. Starts one {@code mongo:8.0} container for the whole test JVM
  * and makes the mock provider deterministic and fast.
  *
  * <p>The container is started once in a static initializer instead of with {@code @Container}. Spring caches the
@@ -24,7 +24,7 @@ import org.testcontainers.utility.DockerImageName;
 })
 public abstract class AbstractMongoIntegrationTest {
 
-	static final MongoDBContainer MONGO = new MongoDBContainer(DockerImageName.parse("mongo:7.0"));
+	static final MongoDBContainer MONGO = new MongoDBContainer(DockerImageName.parse("mongo:8.0"));
 
 	static {
 		MONGO.start();

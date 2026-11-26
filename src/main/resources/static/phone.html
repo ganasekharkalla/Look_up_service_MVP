@@ -207,16 +207,61 @@
     else setHint('', false);
   }
 
+  // Calling code (digits after "+") -> ISO countries that share it. E.164 prefixes are unique per
+  // calling code, so a code with one country identifies that country as soon as it is typed.
+  var countriesByCode = {};
+  countries.forEach(function (c) {
+    (countriesByCode[c.dial.slice(1)] = countriesByCode[c.dial.slice(1)] || []).push(c.iso);
+  });
+
+  // Default country for calling codes that several countries share (the main one for that code).
+  var SHARED_DEFAULT = { '1': 'US', '7': 'RU', '39': 'IT', '44': 'GB', '47': 'NO', '61': 'AU', '212': 'MA',
+    '262': 'RE', '290': 'SH', '358': 'FI', '590': 'GP', '599': 'CW' };
+
+  // Called while typing a "+" number: as soon as the typed digits start with a valid calling code,
+  // switch the selector to that country, overwriting whatever was selected before.
+  // Exception: if the code is shared by several countries (e.g. +1) and the current selection already
+  // uses it, the user's choice is kept. Otherwise a shared code falls back to its main country (+1 = US).
+  // Returns the matched calling code (digits only), or '' if the typed digits do not start with one yet.
+  function selectFromPrefix(raw) {
+    var digits = digitsOf(raw);
+    // Calling codes are 1 to 3 digits and no code is a prefix of another, so the first match is the one.
+    for (var len = 1; len <= 3 && len <= digits.length; len++) {
+      var code = digits.slice(0, len);
+      var isos = countriesByCode[code];
+      if (!isos) continue;
+      var iso;
+      if (isos.length === 1) iso = isos[0];
+      else if (isos.indexOf(selected.iso) >= 0) iso = selected.iso;
+      else iso = SHARED_DEFAULT[code] && isos.indexOf(SHARED_DEFAULT[code]) >= 0 ? SHARED_DEFAULT[code] : isos[0];
+      if (selected.iso !== iso) {
+        selected = byIso[iso];
+        renderButton();
+      }
+      return code;
+    }
+    return '';
+  }
+
   function reformat() {
     var raw = input.value;
     if (raw.trim().charAt(0) === '+') {
-      // International paste: derive the country from the number itself.
+      // Once the full number parses to a country, use its exact national format (this also covers pasted numbers).
       var intl = lib.parsePhoneNumberFromString(raw);
       if (intl && intl.country && byIso[intl.country]) {
         selected = byIso[intl.country];
         renderButton();
         input.value = intl.formatNational();
         raw = input.value;
+      } else {
+        // The typed digits start with a calling code: select its country and remove the code from the input,
+        // so only the national number remains.
+        var code = selectFromPrefix(raw);
+        if (code) {
+          var rest = digitsOf(raw).slice(code.length);
+          input.value = rest ? new lib.AsYouType(selected.iso).input(rest) : '';
+          raw = input.value;
+        }
       }
     } else if (raw) {
       input.value = new lib.AsYouType(selected.iso).input(raw);

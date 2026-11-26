@@ -411,7 +411,7 @@ Actuator exposes `health` and `info` at `/actuator/health` and `/actuator/info`.
 
 ### Running tests
 
-Docker must be running. The tests start `mongo:7.0` through Testcontainers and set the mock provider failure rates to zero.
+Docker must be running. The tests start `mongo:8.0` through Testcontainers and set the mock provider failure rates to zero.
 
 ```bash
 ./mvnw clean verify

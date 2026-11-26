@@ -79,7 +79,7 @@ Requirements: Java 17 and Docker. Use the bundled `./mvnw`, so no local Maven is
 # Run against a local MongoDB (override the default URI if needed)
 MONGODB_URI="mongodb://localhost:27017/lookup_local" ./mvnw spring-boot:run
 
-# Build and run all tests (Docker must be running; Testcontainers starts mongo:7.0)
+# Build and run all tests (Docker must be running; Testcontainers starts mongo:8.0)
 ./mvnw clean verify
 ```
 

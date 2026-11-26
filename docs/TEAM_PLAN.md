@@ -244,7 +244,7 @@ Members 1 and 2 can start before step 3, but they merge after it so the project 
 - `MongoConfig`: `@EnableMongoAuditing`. `ClockConfig`: `Clock.systemUTC()`.
 - `StalenessPolicy.isStale`: `checkedAt` plus `stalenessTtlDays`, compared against `Clock.instant()`.
 - Entities and repositories exactly as listed under Common. `MongoRepository<..., String>`, no custom queries. No TTL index.
-- Tests: `AbstractMongoIntegrationTest` (`@SpringBootTest`, `@TestPropertySource` with the zero mock rates and short retry backoff, static `@Container @ServiceConnection MongoDBContainer("mongo:7.0")`), a `contextLoads` test, repository integration tests (save, find, `@Version` bump, audit fields set).
+- Tests: `AbstractMongoIntegrationTest` (`@SpringBootTest`, `@TestPropertySource` with the zero mock rates and short retry backoff, static `@Container @ServiceConnection MongoDBContainer("mongo:8.0")`), a `contextLoads` test, repository integration tests (save, find, `@Version` bump, audit fields set).
 - Springdoc config, and the developer guide in `DESIGN.md` (how to run, how to test with Docker, package overview, ownership table). Leave the design content of `DESIGN.md` as it is.
 
 **Merges first.** Others depend on your entities, repositories and properties classes.
