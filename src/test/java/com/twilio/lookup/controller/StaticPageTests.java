@@ -23,7 +23,9 @@ class StaticPageTests extends AbstractMongoIntegrationTest {
 		mvc.perform(get("/index.html")).andExpect(status().isOk())
 				.andExpect(content().string(Matchers.allOf(
 						Matchers.containsString("href=\"/phone\""),
-						Matchers.containsString("href=\"/email\""))));
+						Matchers.containsString("href=\"/email\""),
+						Matchers.containsString("href=\"/favicon.svg\""),
+						Matchers.containsString("name=\"description\""))));
 	}
 
 	@Test
@@ -37,7 +39,9 @@ class StaticPageTests extends AbstractMongoIntegrationTest {
 						Matchers.containsString("id=\"national-number\""),
 						Matchers.containsString("id=\"submit-btn\""),
 						Matchers.containsString("id=\"result\""),
-						Matchers.containsString("/api/v1/lookups/phone"))));
+						Matchers.containsString("/api/v1/lookups/phone"),
+						Matchers.containsString("href=\"/favicon.svg\""),
+						Matchers.containsString("name=\"description\""))));
 	}
 
 	@Test
@@ -48,6 +52,8 @@ class StaticPageTests extends AbstractMongoIntegrationTest {
 						Matchers.containsString("id=\"email-form\""),
 						Matchers.containsString("id=\"email\""),
 						Matchers.containsString("id=\"submit-btn\""),
-						Matchers.containsString("/api/v1/lookups/email"))));
+						Matchers.containsString("/api/v1/lookups/email"),
+						Matchers.containsString("href=\"/favicon.svg\""),
+						Matchers.containsString("name=\"description\""))));
 	}
 }
