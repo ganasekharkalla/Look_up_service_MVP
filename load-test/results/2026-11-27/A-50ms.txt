@@ -1,0 +1,14 @@
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+2500     2493       0         0         23        57        67       
+3000     2991       0         0         22        54        60       
+3500     3448       0         848       33        104       207      
+4000     3959       0         537       36        113       184      
+4500     4445       0         848       50        137       186      
+5000     4628       0         6419      217       346       438      
+6000     5171       0         13940     374       612       712      
+8000     5541       0         44720     578       822       896      
+
+Raw k6 summaries: /tmp/tmp.aGViHSEnMb
+peak app CPU sample: 488.50% (6 cores = 600%)

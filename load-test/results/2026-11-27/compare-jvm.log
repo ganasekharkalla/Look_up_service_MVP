@@ -1,0 +1,94 @@
+=== Case A | latency 50ms | openjdk version "17.0.21.1" 2026-11-17 | extra: none
+warm-up: 2000 req/s for 45s (discarded)
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+2500     2493       0         0         23        57        67       
+3000     2991       0         0         22        54        60       
+3500     3448       0         848       33        104       207      
+4000     3959       0         537       36        113       184      
+4500     4445       0         848       50        137       186      
+5000     4628       0         6419      217       346       438      
+6000     5171       0         13940     374       612       712      
+8000     5541       0         44720     578       822       896      
+
+Raw k6 summaries: /tmp/tmp.aGViHSEnMb
+peak app CPU sample: 488.50% (6 cores = 600%)
+=== Case B | latency 50ms | openjdk version "21.0.13.1" 2026-11-17 | extra: none
+warm-up: 2000 req/s for 45s (discarded)
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+2500     2493       0         0         22        53        63       
+3000     2991       0         0         21        52        55       
+3500     3490       0         0         21        53        57       
+4000     3989       0         0         25        60        100      
+4500     4488       0         0         22        55        61       
+5000     4536       0         7229      119       435       535      
+6000     4802       0         20435     519       840       958      
+8000     5532       0         45036     586       813       874      
+
+Raw k6 summaries: /tmp/tmp.5BVeExkar1
+peak app CPU sample: 484.50% (6 cores = 600%)
+=== Case C | latency 50ms | openjdk version "21.0.13.1" 2026-11-17 | extra: --spring.threads.virtual.enabled=true
+warm-up: 2000 req/s for 45s (discarded)
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+2500     2493       0         0         21        52        54       
+3000     2992       0         0         21        52        55       
+3500     3490       0         0         21        52        54       
+4000     3989       0         0         21        53        54       
+4500     4487       0         0         22        53        57       
+5000     4986       0         0         24        58        67       
+6000     5952       0         629       43        117       194      
+8000     6161       0         33434     441       2207      2448     
+
+Raw k6 summaries: /tmp/tmp.rQ9fVM6yXV
+peak app CPU sample: 489.50% (6 cores = 600%)
+=== Case A | latency 300ms | openjdk version "17.0.21.1" 2026-11-17 | extra: none
+warm-up: 2000 req/s for 45s (discarded)
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+1000     982        0         51        121       302       304      
+1500     1473       0         93        119       301       303      
+2000     1628       0         4330      865       1653      1841     
+2500     1649       0         12706     1487      2575      2639     
+3000     1644       0         22862     1716      2641      2676     
+4000     1621       0         43359     1920      2670      2704     
+6000     1629       0         82993     2042      2667      2705     
+
+Raw k6 summaries: /tmp/tmp.LRe1dfFf3Y
+peak app CPU sample: 202.00% (6 cores = 600%)
+=== Case B | latency 300ms | openjdk version "21.0.13.1" 2026-11-17 | extra: none
+warm-up: 2000 req/s for 45s (discarded)
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+1000     982        0         56        119       301       302      
+1500     1473       0         82        120       301       302      
+2000     1648       0         4270      828       1549      1703     
+2500     1631       0         13077     1546      2603      2643     
+3000     1637       0         23093     1711      2620      2680     
+4000     1623       0         43319     1923      2682      2708     
+6000     1643       0         82900     2048      2649      2684     
+
+Raw k6 summaries: /tmp/tmp.0RjVSUZ7f1
+peak app CPU sample: 155.00% (6 cores = 600%)
+=== Case C | latency 300ms | openjdk version "21.0.13.1" 2026-11-17 | extra: --spring.threads.virtual.enabled=true
+warm-up: 2000 req/s for 45s (discarded)
+Target: http://localhost:8090 | step: 20s | fresh ratio: 0.4
+
+target   achieved   errors%   dropped   avg(ms)   p95(ms)   p99(ms)  
+1000     982        0         64        122       301       302      
+1500     1473       0         90        121       301       302      
+2000     1965       0         105       121       302       303      
+2500     2455       0         146       120       302       304      
+3000     2941       0         255       120       302       304      
+4000     3921       0         401       120       303       307      
+6000     5800       0         2225      137       326       350      
+
+Raw k6 summaries: /tmp/tmp.SyJcZrqG0y
+peak app CPU sample: 469.00% (6 cores = 600%)
+All done. Results in /tmp/lookup-bench/results
